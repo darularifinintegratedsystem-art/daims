@@ -1,0 +1,142 @@
+<script>
+  /**
+   * Dashboard shell logic (Tahap 1 scope only).
+   *
+   * Navigation is NEVER hardcoded per role — it is derived purely from the
+   * accessRules returned by Permission.gs (MASTER_HAK_AKSES), matched
+   * against the known DAIMS_* module identifiers used in the seed data
+   * (verified: HAK0001-HAK0015, e.g. 'DAIMS_PENGASUHAN', 'DAIMS_KEUANGAN').
+   * Adding a new module to the sidebar later is a one-line addition to
+   * MODULE_LABELS below, never a role-based if/else.
+   */
+
+  // Domain identifiers per Architecture Master §3 (19 domains). Label text
+  // in Bahasa Indonesia matching the handbook's own domain naming.
+  const MODULE_LABELS = {
+    DAIMS_CORE: 'Core / Kelembagaan',
+    DAIMS_AKTIVITAS: 'Aktivitas',
+    DAIMS_STUDENT_ENGINE: 'Pelanggaran & Prestasi',
+    DAIMS_GAMIFICATION: 'Gamifikasi & Leaderboard',
+    DAIMS_AKADEMIK: 'Akademik',
+    DAIMS_ALQURAN: "Al-Qur'an",
+    DAIMS_KITAB: 'Kitab',
+    DAIMS_BAHASA: 'Bahasa',
+    DAIMS_PENGASUHAN: 'Pengasuhan',
+    DAIMS_KESEHATAN: 'Kesehatan',
+    DAIMS_KEUANGAN: 'Keuangan',
+    DAIMS_SDM: 'SDM',
+    DAIMS_SARPRAS: 'Sarana Prasarana',
+    DAIMS_DAPUR: 'Dapur',
+    DAIMS_LAUNDRY: 'Laundry',
+    DAIMS_PERPUSTAKAAN: 'Perpustakaan',
+    DAIMS_MEDIA_CENTER: 'Media Center',
+    DAIMS_SEKRETARIAT: 'Sekretariat',
+    DAIMS_TU: 'Tata Usaha'
+  };
+
+  function daimsShell() {
+    return {
+      loading: true,
+      authError: null,
+      sidebarOpen: false,
+      user: null,
+      role: null,
+      accessRules: [],
+      navItems: [],
+      activeModule: null,
+
+      notifOpen: false,
+      notifications: [],
+
+      get unreadCount() {
+        return this.notifications.filter(function (n) { return n.status_kirim === 'Belum Dibaca'; }).length;
+      },
+
+      get currentModuleLabel() {
+        if (!this.activeModule) return 'Dashboard';
+        return MODULE_LABELS[this.activeModule] || this.activeModule;
+      },
+
+      get userInitials() {
+        if (!this.user || !this.user.nama_lengkap) return '?';
+        return this.user.nama_lengkap
+          .split(' ')
+          .filter(Boolean)
+          .slice(0, 2)
+          .map(function (w) { return w[0]; })
+          .join('')
+          .toUpperCase();
+      },
+
+      init() {
+        const self = this;
+        google.script.run
+          .withSuccessHandler(function (res) {
+            self.loading = false;
+            if (!res.ok) {
+              self.authError = res.error;
+              return;
+            }
+            self.user = res.data.user;
+            self.role = res.data.role;
+            self.accessRules = res.data.accessRules;
+            self.buildNav();
+            self.loadNotifications();
+            // Poll every 60s — deliberately simple (no push infra) for
+            // Tahap 2 scope; acceptable per ADR-012 (queue is not meant to
+            // be real-time except Disposisi, which is a separate ADR-011
+            // case not in scope here).
+            setInterval(function () { self.loadNotifications(); }, 60000);
+          })
+          .withFailureHandler(function (err) {
+            self.loading = false;
+            self.authError = (err && err.message) || String(err);
+          })
+          .getCurrentUserForClient();
+      },
+
+      loadNotifications() {
+        const self = this;
+        google.script.run
+          .withSuccessHandler(function (res) {
+            if (res.ok) self.notifications = res.data;
+          })
+          .clientGetNotifications();
+      },
+
+      markRead(notif) {
+        const self = this;
+        if (notif.status_kirim !== 'Belum Dibaca') return;
+        google.script.run
+          .withSuccessHandler(function (res) {
+            if (res.ok) self.loadNotifications();
+          })
+          .clientMarkNotificationRead(notif.id_notifikasi);
+      },
+
+      buildNav() {
+        const rules = this.accessRules || [];
+        const hasWildcard = rules.some(function (r) { return r.modul === '*'; });
+
+        let modules;
+        if (hasWildcard) {
+          // '*' role (e.g. Super Admin, Mudir) sees every defined module —
+          // access to actual data within it still goes through
+          // requireAccess() per request, this only controls nav visibility.
+          modules = Object.keys(MODULE_LABELS);
+        } else {
+          modules = Array.from(new Set(rules.map(function (r) { return r.modul; })))
+            .filter(function (m) { return m !== '*' && MODULE_LABELS[m]; });
+        }
+
+        this.navItems = modules
+          .map(function (m) { return { modul: m, label: MODULE_LABELS[m] }; })
+          .sort(function (a, b) { return a.label.localeCompare(b.label); });
+
+        if (this.navItems.length > 0) {
+          this.activeModule = this.navItems[0].modul;
+        }
+      }
+    };
+  }
+</script>

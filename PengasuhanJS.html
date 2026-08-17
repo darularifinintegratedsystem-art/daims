@@ -1,0 +1,164 @@
+<script>
+  /**
+   * Alpine component for the DAIMS_PENGASUHAN reference module. Scoped
+   * separately from daimsShell() (the sidebar/topbar) so this module can be
+   * used as the template for Tahap 3 modules without touching shell code.
+   */
+  function pengasuhanModule() {
+    return {
+      tabs: [
+        { id: 'dashboard', label: 'Dashboard' },
+        { id: 'perizinan', label: 'Perizinan' },
+        { id: 'incident', label: 'Pelanggaran & SP' },
+        { id: 'mutabaah', label: 'Mutabaah Harian' }
+      ],
+      activeTab: 'dashboard',
+
+      dashboard: null,
+      perizinanList: [],
+      incidentList: [],
+      perizinanForm: { id_santri: '', jenis_izin: '', tanggal_mulai: '', tanggal_selesai: '' },
+
+      approvalTarget: null,
+      approvalStep: null,
+      approvalNote: '',
+
+      spForm: { id_santri: '', id_incident_log: '', tingkat_sp: '1', alasan: '' },
+      lastGeneratedSp: null,
+
+      mutabaahAspects: [
+        { key: 'sholat_berjamaah', label: 'Sholat Berjamaah' },
+        { key: 'tilawah_harian', label: 'Tilawah Harian' },
+        { key: 'kedisiplinan_asrama', label: 'Kedisiplinan Asrama' },
+        { key: 'adab_harian', label: 'Adab Harian' }
+      ],
+      mutabaahForm: {
+        id_santri: '', sholat_berjamaah: 'Ya', tilawah_harian: 'Ya',
+        kedisiplinan_asrama: 'Ya', adab_harian: 'Ya'
+      },
+
+      get allYa() {
+        return this.mutabaahAspects.every(a => this.mutabaahForm[a.key] === 'Ya');
+      },
+
+      init() {
+        this.loadDashboard();
+        this.loadPerizinan();
+        this.loadIncidents();
+      },
+
+      // -- Dashboard -------------------------------------------------
+      loadDashboard() {
+        google.script.run
+          .withSuccessHandler(res => { if (res.ok) this.dashboard = res.data; else console.error(res.error); })
+          .clientGetPengasuhanDashboard();
+      },
+
+      // -- Perizinan ---------------------------------------------------
+      loadPerizinan() {
+        google.script.run
+          .withSuccessHandler(res => { if (res.ok) this.perizinanList = res.data; else console.error(res.error); })
+          .clientGetRows('DAIMS_PENGASUHAN', 'PERIZINAN', null);
+      },
+      submitPerizinan() {
+        const f = this.perizinanForm;
+        if (!f.id_santri || !f.jenis_izin || !f.tanggal_mulai || !f.tanggal_selesai) {
+          alert('Seluruh field wajib diisi.');
+          return;
+        }
+        google.script.run
+          .withSuccessHandler(res => {
+            if (!res.ok) { alert(res.error); return; }
+            this.perizinanForm = { id_santri: '', jenis_izin: '', tanggal_mulai: '', tanggal_selesai: '' };
+            this.loadPerizinan();
+          })
+          .clientAjukanPerizinan(f.id_santri, f.jenis_izin, f.tanggal_mulai, f.tanggal_selesai, '');
+      },
+      decide(idPerizinan, keputusan) {
+        google.script.run
+          .withSuccessHandler(res => {
+            if (!res.ok) { alert(res.error); return; }
+            this.loadPerizinan();
+          })
+          .clientDecidePerizinan(idPerizinan, keputusan);
+      },
+
+      // -- Incident / SP -------------------------------------------------
+      loadIncidents() {
+        google.script.run
+          .withSuccessHandler(res => { if (res.ok) this.incidentList = res.data; else console.error(res.error); })
+          .clientGetRows('DAIMS_STUDENT_ENGINE', 'INCIDENT_LOG', null);
+      },
+      verify(idIncidentLog) {
+        google.script.run
+          .withSuccessHandler(res => {
+            if (!res.ok) { alert(res.error); return; }
+            this.loadIncidents();
+          })
+          .clientVerifyIncident(idIncidentLog);
+      },
+      loadApprovalStep(idIncidentLog) {
+        this.approvalTarget = idIncidentLog;
+        this.approvalStep = null;
+        google.script.run
+          .withSuccessHandler(res => {
+            if (!res.ok) { alert(res.error); return; }
+            this.approvalStep = res.data;
+          })
+          .clientGetNextApprovalStep(idIncidentLog);
+      },
+      submitApproval(idIncidentLog, keputusan) {
+        google.script.run
+          .withSuccessHandler(res => {
+            if (!res.ok) { alert(res.error); return; }
+            this.approvalTarget = null;
+            this.approvalStep = null;
+            this.approvalNote = '';
+            this.loadIncidents();
+            if (res.data.chainComplete) alert('Seluruh jenjang approval selesai — incident kini Berlaku.');
+          })
+          .clientSubmitIncidentApproval(idIncidentLog, keputusan, this.approvalNote);
+      },
+
+      createAndGenerateSp() {
+        const f = this.spForm;
+        if (!f.id_santri || !f.id_incident_log || !f.alasan) {
+          alert('id_santri, id_incident_log, dan alasan wajib diisi.');
+          return;
+        }
+        // Single atomic server call — validate -> insert -> generate PDF.
+        // (An earlier draft split this into two round trips, which allowed
+        // an invalid SP row to be saved before validation ran. Fixed.)
+        google.script.run
+          .withSuccessHandler(res => {
+            if (!res.ok) { alert(res.error); return; }
+            this.lastGeneratedSp = res.data;
+          })
+          .clientCreateAndIssueSuratPeringatan(f.id_santri, f.id_incident_log, f.tingkat_sp, f.alasan);
+      },
+
+      // -- Mutabaah -------------------------------------------------
+      submitMutabaah() {
+        if (this.allYa && !confirm('Seluruh aspek "Ya" — lanjutkan simpan?')) return;
+        const f = this.mutabaahForm;
+        if (!f.id_santri) { alert('id_santri wajib diisi.'); return; }
+        google.script.run
+          .withSuccessHandler(res => {
+            if (!res.ok) { alert(res.error); return; }
+            this.mutabaahForm.id_santri = '';
+            alert('Mutabaah tersimpan.');
+            this.loadDashboard();
+          })
+          .clientInsertRow('DAIMS_PENGASUHAN', 'MUTABAAH_HARIAN', {
+            id_santri: f.id_santri,
+            tanggal: new Date().toISOString(),
+            sholat_berjamaah: f.sholat_berjamaah,
+            tilawah_harian: f.tilawah_harian,
+            kedisiplinan_asrama: f.kedisiplinan_asrama,
+            adab_harian: f.adab_harian,
+            id_sdm_pencatat: this.$root.user.id_sdm
+          }, []);
+      }
+    };
+  }
+</script>

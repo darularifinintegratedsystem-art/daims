@@ -1,0 +1,45 @@
+<script>
+  function keuanganModule() {
+    return {
+      dashboard: null,
+      tagihanForm: { periode_bulan: '', nominal: '750000', jatuh_tempo: '' },
+      bayarForm: { id_tagihan: '', nominal_dibayar: '', metode_bayar: 'Transfer Bank' },
+      lastGenerateResult: null,
+
+      init() {
+        this.loadDashboard();
+      },
+
+      loadDashboard() {
+        google.script.run
+          .withSuccessHandler(res => { if (res.ok) this.dashboard = res.data; else console.error(res.error); })
+          .clientGetKeuanganDashboard();
+      },
+
+      generateTagihan() {
+        const f = this.tagihanForm;
+        if (!f.periode_bulan || !f.nominal || !f.jatuh_tempo) { alert('Seluruh field wajib diisi.'); return; }
+        google.script.run
+          .withSuccessHandler(res => {
+            if (!res.ok) { alert(res.error); return; }
+            this.lastGenerateResult = res.data;
+            this.loadDashboard();
+          })
+          .clientGenerateTagihanSppBulanan(f.periode_bulan, f.nominal, f.jatuh_tempo);
+      },
+
+      submitBayar() {
+        const f = this.bayarForm;
+        if (!f.id_tagihan || !f.nominal_dibayar) { alert('id_tagihan dan nominal wajib diisi.'); return; }
+        google.script.run
+          .withSuccessHandler(res => {
+            if (!res.ok) { alert(res.error); return; }
+            this.bayarForm = { id_tagihan: '', nominal_dibayar: '', metode_bayar: 'Transfer Bank' };
+            this.loadDashboard();
+            alert('Pembayaran tersimpan, tagihan berstatus Lunas.');
+          })
+          .clientBayarSpp(f.id_tagihan, f.nominal_dibayar, f.metode_bayar);
+      }
+    };
+  }
+</script>

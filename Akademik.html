@@ -1,0 +1,65 @@
+<!-- ============================================================ -->
+<!-- DAIMS_AKADEMIK module (Tahap 3) — reuses the same shell/notification/ -->
+<!-- hanging-items patterns established in Pengasuhan (Tahap 2), per the -->
+<!-- roadmap's own "jangan reinvent, reuse" instruction. -->
+<!-- ============================================================ -->
+<div x-data="akademikModule()" x-init="init()" x-show="$root.activeModule === 'DAIMS_AKADEMIK'" x-cloak class="space-y-4">
+
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div class="bg-white border border-stone-200 rounded-xl p-4">
+      <p class="text-xs text-stone-400 mb-1">Kehadiran tercatat hari ini</p>
+      <p class="text-2xl font-semibold text-stone-800" x-text="dashboard?.kehadiranHariIni ?? '—'"></p>
+      <p class="text-xs mt-1" :class="(dashboard?.alpaHariIni || 0) > 0 ? 'text-amber-600' : 'text-stone-400'">
+        <span x-text="dashboard?.alpaHariIni ?? 0"></span> Alpa
+      </p>
+    </div>
+    <div class="bg-white border border-stone-200 rounded-xl p-4">
+      <p class="text-xs text-stone-400 mb-1">Total nilai tercatat</p>
+      <p class="text-2xl font-semibold text-stone-800" x-text="dashboard?.totalNilaiTercatat ?? '—'"></p>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <!-- Kehadiran Kelas -->
+    <div class="bg-white border border-stone-200 rounded-xl p-4">
+      <h3 class="text-sm font-medium text-stone-700 mb-3">Catat Kehadiran Kelas</h3>
+      <div class="space-y-2">
+        <input x-model="kehadiranForm.id_kelas" placeholder="id_kelas (KLS002)" class="w-full text-sm border border-stone-200 rounded-lg px-3 py-2">
+        <input x-model="kehadiranForm.id_santri" placeholder="id_santri (STR0001)" class="w-full text-sm border border-stone-200 rounded-lg px-3 py-2">
+        <select x-model="kehadiranForm.status_hadir" class="w-full text-sm border border-stone-200 rounded-lg px-3 py-2">
+          <option>Hadir</option><option>Sakit</option><option>Izin</option><option>Alpa</option>
+        </select>
+      </div>
+      <button @click="submitKehadiran()" class="mt-3 px-4 py-2 text-sm rounded-lg bg-emerald-700 text-white hover:bg-emerald-800">
+        Simpan
+      </button>
+      <p class="text-xs text-stone-400 mt-2">Satu santri hanya boleh satu baris per kelas per tanggal — duplikasi akan ditolak server.</p>
+    </div>
+
+    <!-- Nilai Akademik -->
+    <div class="bg-white border border-stone-200 rounded-xl p-4">
+      <h3 class="text-sm font-medium text-stone-700 mb-3">Input Nilai Akademik</h3>
+      <div class="space-y-2">
+        <input x-model="nilaiForm.id_santri" placeholder="id_santri" class="w-full text-sm border border-stone-200 rounded-lg px-3 py-2">
+        <input x-model="nilaiForm.id_mapel" placeholder="id_mapel (MPL001)" class="w-full text-sm border border-stone-200 rounded-lg px-3 py-2">
+        <input x-model="nilaiForm.id_kelas" placeholder="id_kelas" class="w-full text-sm border border-stone-200 rounded-lg px-3 py-2">
+        <div class="grid grid-cols-2 gap-2">
+          <select x-model="nilaiForm.semester" class="text-sm border border-stone-200 rounded-lg px-3 py-2">
+            <option>Ganjil</option><option>Genap</option>
+          </select>
+          <select x-model="nilaiForm.id_tahun_ajaran" class="text-sm border border-stone-200 rounded-lg px-3 py-2">
+            <option value="">Tahun ajaran…</option>
+            <template x-for="ta in tahunAjaranList" :key="ta.id_tahun_ajaran">
+              <option :value="ta.id_tahun_ajaran" x-text="ta.nama_tahun_ajaran + (ta.status === 'Aktif' ? ' (Aktif)' : '')"></option>
+            </template>
+          </select>
+        </div>
+        <input x-model="nilaiForm.nilai_akhir" type="number" min="0" max="100" placeholder="Nilai (0-100)" class="w-full text-sm border border-stone-200 rounded-lg px-3 py-2">
+      </div>
+      <button @click="submitNilai()" class="mt-3 px-4 py-2 text-sm rounded-lg bg-emerald-700 text-white hover:bg-emerald-800">
+        Simpan
+      </button>
+      <p class="text-xs text-stone-400 mt-2">Hanya guru yang terdaftar di PENGAMPU_MATA_PELAJARAN untuk kombinasi mapel+kelas ini yang bisa menyimpan.</p>
+    </div>
+  </div>
+</div>

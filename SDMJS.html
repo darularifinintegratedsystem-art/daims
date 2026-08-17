@@ -1,0 +1,81 @@
+<script>
+  function sdmModule() {
+    return {
+      dashboard: null,
+      cutiList: [],
+      cutiForm: { id_sdm: '', jenis_cuti: '', tanggal_mulai: '', tanggal_selesai: '' },
+      kinerjaForm: { id_sdm: '', periode: '', skor: '', catatan: '' },
+      pelatihanForm: { id_pengajuan_anggaran: '', nama_pelatihan: '', id_sdm_peserta: '', output: '' },
+
+      init() {
+        this.loadDashboard();
+        this.loadCuti();
+      },
+
+      loadDashboard() {
+        google.script.run
+          .withSuccessHandler(res => { if (res.ok) this.dashboard = res.data; else console.error(res.error); })
+          .clientGetSdmDashboard();
+      },
+
+      loadCuti() {
+        google.script.run
+          .withSuccessHandler(res => { if (res.ok) this.cutiList = res.data; else console.error(res.error); })
+          .clientGetRows('DAIMS_SDM', 'CUTI_SDM', null);
+      },
+
+      submitCuti() {
+        const f = this.cutiForm;
+        if (!f.id_sdm || !f.jenis_cuti || !f.tanggal_mulai || !f.tanggal_selesai) {
+          alert('Seluruh field wajib diisi.');
+          return;
+        }
+        google.script.run
+          .withSuccessHandler(res => {
+            if (!res.ok) { alert(res.error); return; }
+            this.cutiForm = { id_sdm: '', jenis_cuti: '', tanggal_mulai: '', tanggal_selesai: '' };
+            this.loadCuti();
+          })
+          .clientAjukanCuti(f.id_sdm, f.jenis_cuti, f.tanggal_mulai, f.tanggal_selesai);
+      },
+
+      decideCuti(idCuti, keputusan) {
+        google.script.run
+          .withSuccessHandler(res => {
+            if (!res.ok) { alert(res.error); return; }
+            this.loadCuti();
+            this.loadDashboard();
+          })
+          .clientDecideCuti(idCuti, keputusan);
+      },
+
+      submitKinerja() {
+        const f = this.kinerjaForm;
+        if (!f.id_sdm || !f.periode || f.skor === '') { alert('id_sdm, periode, dan skor wajib diisi.'); return; }
+        google.script.run
+          .withSuccessHandler(res => {
+            if (!res.ok) { alert(res.error); return; }
+            this.kinerjaForm = { id_sdm: '', periode: '', skor: '', catatan: '' };
+            this.loadDashboard();
+            alert('Penilaian tersimpan.');
+          })
+          .clientCatatPenilaianKinerja(f.id_sdm, f.periode, f.skor, f.catatan);
+      },
+
+      submitPelatihan() {
+        const f = this.pelatihanForm;
+        if (!f.id_pengajuan_anggaran || !f.nama_pelatihan || !f.id_sdm_peserta) {
+          alert('id_pengajuan_anggaran, nama_pelatihan, dan id_sdm_peserta wajib diisi.');
+          return;
+        }
+        google.script.run
+          .withSuccessHandler(res => {
+            if (!res.ok) { alert(res.error); return; }
+            this.pelatihanForm = { id_pengajuan_anggaran: '', nama_pelatihan: '', id_sdm_peserta: '', output: '' };
+            alert('Pelatihan tercatat.');
+          })
+          .clientCatatPelatihan(f.id_pengajuan_anggaran, f.nama_pelatihan, new Date().toISOString(), f.id_sdm_peserta, f.output);
+      }
+    };
+  }
+</script>

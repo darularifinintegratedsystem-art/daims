@@ -1,0 +1,64 @@
+<script>
+  function akademikModule() {
+    return {
+      dashboard: null,
+      tahunAjaranList: [],
+      kehadiranForm: { id_kelas: '', id_santri: '', status_hadir: 'Hadir' },
+      nilaiForm: { id_santri: '', id_mapel: '', id_kelas: '', semester: 'Genap', id_tahun_ajaran: '', nilai_akhir: '' },
+
+      init() {
+        this.loadDashboard();
+        this.loadTahunAjaran();
+      },
+
+      loadTahunAjaran() {
+        // Read-only lookup — populates the dropdown so operators pick a real
+        // MASTER_TAHUN_AJARAN row (id_tahun_ajaran, e.g. 'TA005') instead of
+        // typing free text (see CHG010 — this column used to be denormalized
+        // text and was migrated to a real FK; the UI must submit the FK now).
+        google.script.run
+          .withSuccessHandler(res => {
+            if (!res.ok) { console.error(res.error); return; }
+            this.tahunAjaranList = res.data.sort((a, b) => b.id_tahun_ajaran.localeCompare(a.id_tahun_ajaran));
+            const active = this.tahunAjaranList.find(t => t.status === 'Aktif');
+            if (active) this.nilaiForm.id_tahun_ajaran = active.id_tahun_ajaran;
+          })
+          .clientGetRows('DAIMS_AKADEMIK', 'MASTER_TAHUN_AJARAN', null);
+      },
+
+      loadDashboard() {
+        google.script.run
+          .withSuccessHandler(res => { if (res.ok) this.dashboard = res.data; else console.error(res.error); })
+          .clientGetAkademikDashboard();
+      },
+
+      submitKehadiran() {
+        const f = this.kehadiranForm;
+        if (!f.id_kelas || !f.id_santri) { alert('id_kelas dan id_santri wajib diisi.'); return; }
+        google.script.run
+          .withSuccessHandler(res => {
+            if (!res.ok) { alert(res.error); return; }
+            this.kehadiranForm.id_santri = '';
+            this.loadDashboard();
+          })
+          .clientCatatKehadiranKelas(f.id_kelas, f.id_santri, new Date().toISOString(), f.status_hadir);
+      },
+
+      submitNilai() {
+        const f = this.nilaiForm;
+        if (!f.id_santri || !f.id_mapel || !f.id_kelas || !f.id_tahun_ajaran || f.nilai_akhir === '') {
+          alert('Seluruh field wajib diisi.');
+          return;
+        }
+        google.script.run
+          .withSuccessHandler(res => {
+            if (!res.ok) { alert(res.error); return; }
+            this.nilaiForm.nilai_akhir = '';
+            this.loadDashboard();
+            alert('Nilai tersimpan.');
+          })
+          .clientCatatNilaiAkademik(f.id_santri, f.id_mapel, f.id_kelas, f.semester, f.id_tahun_ajaran, f.nilai_akhir);
+      }
+    };
+  }
+</script>

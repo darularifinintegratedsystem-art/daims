@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <title><?= appTitle ?></title>
+  <?!= include_('Stylesheet'); ?>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body class="bg-stone-50 text-stone-800 antialiased" x-data="daimsShell()" x-init="init()">
+
+  <!-- ============================================================ -->
+  <!-- LOADING / AUTH GATE                                           -->
+  <!-- ============================================================ -->
+  <template x-if="loading">
+    <div class="min-h-screen flex items-center justify-center">
+      <div class="text-center space-y-3">
+        <div class="w-8 h-8 border-2 border-emerald-700 border-t-transparent rounded-full animate-spin mx-auto"></div>
+        <p class="text-sm text-stone-500">Memuat DAIMS…</p>
+      </div>
+    </div>
+  </template>
+
+  <template x-if="!loading && authError">
+    <div class="min-h-screen flex items-center justify-center px-6">
+      <div class="max-w-md text-center space-y-3">
+        <div class="w-12 h-12 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto text-xl">!</div>
+        <h1 class="text-lg font-semibold text-stone-900">Tidak bisa masuk</h1>
+        <p class="text-sm text-stone-500" x-text="authError"></p>
+      </div>
+    </div>
+  </template>
+
+  <!-- ============================================================ -->
+  <!-- MAIN SHELL                                                    -->
+  <!-- ============================================================ -->
+  <template x-if="!loading && !authError">
+    <div class="min-h-screen flex">
+
+      <!-- Sidebar -->
+      <aside
+        class="fixed inset-y-0 left-0 z-30 w-64 bg-emerald-950 text-emerald-50 transform transition-transform duration-200 lg:translate-x-0 lg:static lg:flex lg:flex-col"
+        :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'">
+        <div class="h-16 flex items-center gap-2 px-5 border-b border-emerald-900/60">
+          <div class="w-8 h-8 rounded-md bg-emerald-500/20 flex items-center justify-center text-emerald-300 font-bold">DA</div>
+          <div class="leading-tight">
+            <p class="text-sm font-semibold tracking-wide">DAIMS</p>
+            <p class="text-[11px] text-emerald-300/70">Darul Arifin</p>
+          </div>
+        </div>
+
+        <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+          <template x-for="item in navItems" :key="item.modul">
+            <button
+              @click="activeModule = item.modul; sidebarOpen = false"
+              class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors"
+              :class="activeModule === item.modul
+                ? 'bg-emerald-800 text-white'
+                : 'text-emerald-100/80 hover:bg-emerald-900/60 hover:text-white'">
+              <span class="w-1.5 h-1.5 rounded-full bg-current opacity-60"></span>
+              <span x-text="item.label"></span>
+            </button>
+          </template>
+
+          <template x-if="navItems.length === 0">
+            <p class="text-xs text-emerald-300/60 px-3 py-2">Belum ada modul yang bisa diakses role ini.</p>
+          </template>
+        </nav>
+
+        <div class="px-3 py-4 border-t border-emerald-900/60 text-[11px] text-emerald-300/60">
+          Phase 4 — Tahap 1 (Fondasi)
+        </div>
+      </aside>
+
+      <!-- Overlay for mobile sidebar -->
+      <div
+        x-show="sidebarOpen"
+        x-transition.opacity
+        @click="sidebarOpen = false"
+        class="fixed inset-0 bg-black/40 z-20 lg:hidden">
+      </div>
+
+      <!-- Main column -->
+      <div class="flex-1 flex flex-col lg:ml-0">
+
+        <!-- Topbar -->
+        <header class="h-16 bg-white border-b border-stone-200 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-10">
+          <div class="flex items-center gap-3">
+            <button @click="sidebarOpen = !sidebarOpen" class="lg:hidden p-2 -ml-2 text-stone-500 hover:text-stone-800">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 6h18M3 12h18M3 18h18" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <h1 class="text-sm font-medium text-stone-700" x-text="currentModuleLabel"></h1>
+          </div>
+
+          <div class="flex items-center gap-4">
+            <!-- Notification Center (ADR-012, NOTIFICATION_QUEUE) -->
+            <div class="relative">
+              <button @click="notifOpen = !notifOpen; if (notifOpen) loadNotifications()"
+                      class="relative p-2 text-stone-500 hover:text-stone-800">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M13.73 21a2 2 0 01-3.46 0" stroke-linecap="round"/>
+                </svg>
+                <span x-show="unreadCount > 0"
+                      class="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center"
+                      x-text="unreadCount"></span>
+              </button>
+
+              <div x-show="notifOpen" @click.outside="notifOpen = false" x-cloak
+                   class="absolute right-0 mt-2 w-80 bg-white border border-stone-200 rounded-xl shadow-lg z-40 max-h-96 overflow-y-auto">
+                <div class="px-4 py-3 border-b border-stone-100 text-sm font-medium text-stone-700">Notifikasi</div>
+                <template x-for="n in notifications" :key="n.id_notifikasi">
+                  <button @click="markRead(n)"
+                          class="w-full text-left px-4 py-3 border-b border-stone-50 hover:bg-stone-50 block"
+                          :class="n.status_kirim === 'Belum Dibaca' ? 'bg-emerald-50/50' : ''">
+                    <p class="text-sm text-stone-800" x-text="n.judul"></p>
+                    <p class="text-xs text-stone-500 mt-0.5" x-text="n.pesan"></p>
+                    <p class="text-[11px] text-stone-400 mt-1" x-text="n.modul_sumber"></p>
+                  </button>
+                </template>
+                <template x-if="notifications.length === 0">
+                  <p class="px-4 py-6 text-sm text-stone-400 text-center">Tidak ada notifikasi.</p>
+                </template>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2.5 pl-4 border-l border-stone-200">
+              <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center text-xs font-semibold"
+                   x-text="userInitials"></div>
+              <div class="hidden sm:block leading-tight">
+                <p class="text-sm font-medium text-stone-800" x-text="user?.nama_lengkap"></p>
+                <p class="text-[11px] text-stone-400" x-text="role?.nama_role"></p>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <!-- Content area -->
+        <main class="flex-1 p-4 lg:p-6">
+          <div class="max-w-5xl">
+
+            <!-- DAIMS_PENGASUHAN — reference implementation, Tahap 2 -->
+            <?!= include_('Pengasuhan'); ?>
+
+            <!-- DAIMS_AKADEMIK / DAIMS_KEUANGAN — Tahap 3 -->
+            <?!= include_('Akademik'); ?>
+            <?!= include_('Keuangan'); ?>
+
+            <!-- DAIMS_SDM — Tahap 5 -->
+            <?!= include_('SDM'); ?>
+
+            <!-- Every other module: shell placeholder until its own Tahap -->
+            <template x-if="!['DAIMS_PENGASUHAN', 'DAIMS_AKADEMIK', 'DAIMS_KEUANGAN', 'DAIMS_SDM'].includes(activeModule)">
+              <div class="bg-white border border-stone-200 rounded-xl p-6">
+                <h2 class="text-base font-semibold text-stone-800 mb-1" x-text="currentModuleLabel"></h2>
+                <p class="text-sm text-stone-500 mb-4">
+                  Modul ini belum dibangun — DAIMS_PENGASUHAN, DAIMS_AKADEMIK, DAIMS_KEUANGAN (SPP),
+                  dan DAIMS_SDM sudah punya reference implementation; modul lain menyusul memakai pola/komponen yang sama.
+                </p>
+                <div class="rounded-lg border border-dashed border-stone-300 p-8 text-center text-sm text-stone-400">
+                  Konten modul <span class="font-medium text-stone-500" x-text="activeModule"></span> akan tampil di sini.
+                </div>
+              </div>
+            </template>
+          </div>
+        </main>
+      </div>
+    </div>
+  </template>
+
+  <?!= include_('JavaScript'); ?>
+  <?!= include_('PengasuhanJS'); ?>
+  <?!= include_('AkademikJS'); ?>
+  <?!= include_('KeuanganJS'); ?>
+  <?!= include_('SDMJS'); ?>
+</body>
+</html>
